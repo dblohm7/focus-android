@@ -5,6 +5,7 @@
 package org.mozilla.focus.helpers
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.text.format.DateUtils
 import android.util.DisplayMetrics
@@ -16,12 +17,14 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject
 import androidx.test.uiautomator.UiObjectNotFoundException
+import androidx.test.uiautomator.UiScrollable
 import androidx.test.uiautomator.UiSelector
 import okhttp3.mockwebserver.MockResponse
 import okio.Buffer
 import okio.Okio
 import org.hamcrest.Matchers
 import org.junit.Assert
+import org.junit.Assert.assertTrue
 import org.mozilla.focus.R
 import org.mozilla.focus.utils.AppConstants.isKlarBuild
 import java.io.BufferedReader
@@ -32,8 +35,8 @@ import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 
+
 @Suppress("TooManyFunctions")
-// This test visits each page and checks whether some essential elements are being displayed
 object TestHelper {
     @JvmField
     var mDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
@@ -44,6 +47,55 @@ object TestHelper {
     val appName: String
         get() = InstrumentationRegistry.getInstrumentation()
             .targetContext.packageName
+
+    fun verifySnackBarText(text: String) {
+        val snackbarText = mDevice.findObject(
+            UiSelector()
+                .resourceId("$appName:id/snackbar_text")
+                .enabled(true)
+        )
+        snackbarText.waitForExists(waitingTime)
+        assertTrue(snackbarText.text.contains(text))
+    }
+
+    fun verifySystemNotificationExists(notificationMessage: String) {
+        var notificationTray =
+            mDevice.findObject(UiSelector().resourceId("com.android.systemui:id/notification_stack_scroller"))
+
+        if (notificationTray.isScrollable) {
+            notificationTray = UiScrollable(
+                UiSelector().resourceId("com.android.systemui:id/notification_stack_scroller")
+            )
+
+            var notificationFound = false
+
+            do {
+                try {
+                    notificationFound = notificationTray.getChildByText(
+                        UiSelector().text(notificationMessage), notificationMessage, true
+                    ).waitForExists(waitingTime)
+                    assertTrue(notificationFound)
+                } catch (e: UiObjectNotFoundException) {
+                    // scrolls down the notifications until it reaches the end, then it will close
+                    notificationTray.scrollForward()
+                    mDevice.waitForIdle()
+                }
+            } while (!notificationFound)
+        } else {
+            val notificationFound =
+                notificationTray.getChild(UiSelector().textContains(notificationMessage)).exists()
+            assertTrue(notificationFound)
+        }
+    }
+
+    fun isPackageInstalled(packageName: String): Boolean {
+        return try {
+            val packageManager = InstrumentationRegistry.getInstrumentation().context.packageManager
+            packageManager.getApplicationInfo(packageName, 0).enabled
+        } catch (exception: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
 
     // wait for web area to be visible
     @JvmStatic
@@ -121,7 +173,7 @@ object TestHelper {
     @JvmField
     var permAllowBtn = mDevice.findObject(
         UiSelector()
-            .resourceId("com.android.packageinstaller:id/permission_allow_button")
+            .textContains("Allow")
             .clickable(true)
     )
 
@@ -321,37 +373,9 @@ object TestHelper {
     )
 
     @JvmField
-    var downloadFileName = mDevice.findObject(
-        UiSelector()
-            .resourceId(appName + ":id/download_dialog_file_name")
-            .enabled(true)
-    )
-
-    @JvmField
-    var downloadWarning = mDevice.findObject(
-        UiSelector()
-            .resourceId(appName + ":id/download_dialog_warning")
-            .enabled(true)
-    )
-
-    @JvmField
-    var downloadCancelBtn = mDevice.findObject(
-        UiSelector()
-            .resourceId(appName + ":id/download_dialog_cancel")
-            .enabled(true)
-    )
-
-    @JvmField
     var downloadBtn = mDevice.findObject(
         UiSelector()
             .resourceId(appName + ":id/download_dialog_download")
-            .enabled(true)
-    )
-
-    @JvmField
-    var completedMsg = mDevice.findObject(
-        UiSelector()
-            .resourceId(appName + ":id/snackbar_text")
             .enabled(true)
     )
 
